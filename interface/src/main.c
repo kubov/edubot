@@ -21,6 +21,17 @@
 #define IRQ_PORT 2
 #define IRQ 1
 
+#define RX_MODE 1
+#define TX_MODE 0
+
+
+typedef struct nrf_state
+{
+    uint8_t is_transmitting;
+} nrf_state;
+
+
+nrf_state nrf;
 
 void PIOINT2_IRQHandler(void)
 {
@@ -61,6 +72,24 @@ uint8_t nrf_write_register(uint8_t reg, const uint8_t *data, uint8_t len)
     return r;
 }
 
+void nrf_set_mode(uint8_t is_rx)
+{
+    uint8_t config_reg = 0;
+
+    nrf_read_register(CONFIG, &config_reg, 1);
+
+    if (is_rx){
+        nrf.is_transmitting = 0;
+        config_reg |= 1 << PWR_UP | 1 << PRIM_RX;
+    }
+    else
+    {
+        nrf.is_transmitting = 1;
+        config_reg &= 0xfe; // clear PRIM_RX
+    }
+    nrf_write_register(CONFIG, &config_reg, 1);
+}
+
 void nrf_setup(uint8_t channel,
                uint8_t payload_size,
                const uint8_t* raddr,
@@ -79,6 +108,10 @@ void nrf_setup(uint8_t channel,
     CE_LOW;
     nrf_write_register(RX_ADDR_P0, raddr, 5);
     CE_HIGH;
+
+    // start in rx mode
+    nrf.is_transmitting = 0;
+    nrf_set_mode(RX_MODE);
 }
 
 void interface_setup()
@@ -105,18 +138,13 @@ void interface_setup()
     // setup timer
     init_timer32(0, TIME_INTERVAL);
     enable_timer32(0);
-
-
 }
 
 int main (void)
 {
-    char status = 0xff;
-    char value = 0xcc;
     uint8_t buf[5];
 
     interface_setup();
-
 
     nrf_setup(5, 32, "raddr", "taddr");
     while (1)
