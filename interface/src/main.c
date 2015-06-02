@@ -15,8 +15,8 @@
 
 #define CE_PORT 2
 #define CE 0
-#define CE_LOW GPIOSetValue( CE_PORT, CE, LED_OFF)
-#define CE_HIGH GPIOSetValue( CE_PORT, CE, LED_ON)
+#define CE_LOW GPIOSetValue(CE_PORT, CE, LED_OFF)
+#define CE_HIGH GPIOSetValue(CE_PORT, CE, LED_ON)
 
 #define IRQ_PORT 2
 #define IRQ 1
@@ -24,10 +24,12 @@
 #define RX_MODE 1
 #define TX_MODE 0
 
+#define PAYLOAD_SIZE 16
 
 typedef struct nrf_state
 {
     uint8_t is_transmitting;
+    uint8_t payload_size;
 } nrf_state;
 
 
@@ -81,11 +83,13 @@ void nrf_set_mode(uint8_t is_rx)
     if (is_rx){
         nrf.is_transmitting = 0;
         config_reg |= 1 << PWR_UP | 1 << PRIM_RX;
+        CE_HIGH;
     }
     else
     {
         nrf.is_transmitting = 1;
         config_reg &= 0xfe; // clear PRIM_RX
+        CE_LOW;
     }
     nrf_write_register(CONFIG, &config_reg, 1);
 }
@@ -95,6 +99,9 @@ void nrf_setup(uint8_t channel,
                const uint8_t* raddr,
                const uint8_t* taddr)
 {
+
+    nrf.payload_size = payload_size;
+
     // set channel
     nrf_write_register(RF_CH, &channel, 1);
 
@@ -140,17 +147,49 @@ void interface_setup()
     enable_timer32(0);
 }
 
+uint8_t nrf_get_status()
+{
+    SSEL_LOW;
+    uint8_t status = SPI(NOP);
+    SSEL_HIGH;
+
+    return status;
+}
+
+uint8_t nrf_data_ready()
+{
+    return nrf_get_status() & (1 << RX_DR);
+}
+
+uint8_t nrf_get_data(uint8_t* buffer)
+{
+    SSEL_LOW;
+    SPI(R_RX_PAYLOAD);
+
+    for (int i=0; i<nrf.payload_size; i++)
+    {
+        buffer[i] = SPI(NOP);
+    }
+    SSEL_HIGH;
+    uint8_t v = 1 << RX_DR;
+    nrf_write_register(STATUS, &v, 1);
+}
+
 int main (void)
 {
-    uint8_t buf[5];
+    uint8_t input_buffer[PAYLOAD_SIZE];
 
     interface_setup();
 
-    nrf_setup(5, 32, "raddr", "taddr");
+    nrf_setup(1, PAYLOAD_SIZE, (uint8_t*)"lpcRA", (uint8_t*)"avrTA");
     while (1)
     {
-        nrf_read_register(0x0a, buf, 5);
-        delay32Ms(0, 500);
-        //__WFI();
+        uint8_t s = nrf_get_status();
+        uint8_t k = s;
+        if (nrf_data_ready())
+        {
+            nrf_get_data(input_buffer);
+            delay32Ms(0,10);
+        }
     }
 }
