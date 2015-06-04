@@ -7,7 +7,6 @@
 #include "timer32.h"
 #include "nRF24L01.h"
 
-
 #define SSEL_PORT 2
 #define SSEL 2
 #define SSEL_LOW GPIOSetValue( SSEL_PORT, SSEL, LED_OFF)
@@ -32,15 +31,12 @@ typedef struct nrf_state
     uint8_t payload_size;
 } nrf_state;
 
-
 nrf_state nrf;
 
 void PIOINT2_IRQHandler(void)
 {
-  GPIOIntClear(IRQ_PORT, IRQ);
-  return;
+    GPIOIntClear(IRQ_PORT, IRQ);
 }
-
 
 uint8_t SPI(uint8_t TX_Data) {
 	while ((LPC_SSP->SR & (SSPSR_TNF | SSPSR_BSY)) != SSPSR_TNF);
@@ -119,10 +115,11 @@ void nrf_setup(uint8_t channel,
     // start in rx mode
     nrf.is_transmitting = 0;
     nrf_set_mode(RX_MODE);
-}
+};
 
 void interface_setup()
 {
+
     // set SSEL
     GPIOSetDir(SSEL_PORT, SSEL, 1);
     SSEL_HIGH;
@@ -161,7 +158,7 @@ uint8_t nrf_data_ready()
     return nrf_get_status() & (1 << RX_DR);
 }
 
-uint8_t nrf_get_data(uint8_t* buffer)
+void nrf_get_data(uint8_t* buffer)
 {
     SSEL_LOW;
     SPI(R_RX_PAYLOAD);
@@ -178,14 +175,12 @@ uint8_t nrf_get_data(uint8_t* buffer)
 int main (void)
 {
     uint8_t input_buffer[PAYLOAD_SIZE];
-
+    GPIOInit();
     interface_setup();
 
     nrf_setup(1, PAYLOAD_SIZE, (uint8_t*)"lpcRA", (uint8_t*)"avrTA");
     while (1)
     {
-        uint8_t s = nrf_get_status();
-        uint8_t k = s;
         if (nrf_data_ready())
         {
             nrf_get_data(input_buffer);
@@ -193,3 +188,4 @@ int main (void)
         }
     }
 }
+
